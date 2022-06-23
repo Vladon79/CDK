@@ -31,20 +31,20 @@ export class CdkStack extends cdk.Stack {
 			code: new lambda.AssetCode("./src"),
 			handler: "createItem.handler",
 			runtime: lambda.Runtime.NODEJS_16_X,
-			// environment: {
-			// 	TADLE_NAME: cdkTable.tableName,
-			// 	PRIMARY_KEY: "itemId"
-			// }
+			environment: {
+				TADLE_NAME: cdkTable.tableName,
+				PRIMARY_KEY: "itemId"
+			}
 		})
 
 		const createMessage = new lambda.Function(this, "indexCreateMessage", {
 			code: new lambda.AssetCode("./src"),
 			handler: "createMessage.handler",
 			runtime: lambda.Runtime.NODEJS_16_X,
-			environment: {
-				TADLE_NAME: cdkTable.tableName,
-				PRIMARY_KEY: "itemId"
-			}
+			// environment: {
+			// 	TADLE_NAME: cdkTable.tableName,
+			// 	PRIMARY_KEY: "itemId"
+			// }
 		})
 
 		cdkTable.grantReadData(getItem)
