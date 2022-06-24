@@ -1,12 +1,31 @@
 import * as cdk from "aws-cdk-lib"
 import * as apigeteway from "aws-cdk-lib/aws-apigateway"
 import * as lambda from "aws-cdk-lib/aws-lambda"
+import * as lambdaEventSources from "aws-cdk-lib/aws-lambda-event-sources"
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb"
-import { RemovalPolicy } from "aws-cdk-lib"
+import { Topic } from "aws-cdk-lib/aws-sns"
+import { SqsSubscription } from "aws-cdk-lib/aws-sns-subscriptions"
+import { Queue } from "aws-cdk-lib/aws-sqs"
 
 export class CdkStack extends cdk.Stack {
 	constructor(scope: cdk.App, id: string, props?: cdk.StackProps) {
 		super(scope, id, props)
+
+		//SQS
+		const queue: Queue = new Queue(this, "CDKQueue", {
+			queueName: "CDK"
+		})
+
+		// queue.grantConsumeMessages(addMessageInDinamo)
+
+		//SNS
+		const topic: Topic = new Topic(this, "CDKTopic", {
+			displayName: "CDK",
+			topicName: "CDK",
+			fifo: false
+		})
+
+		topic.addSubscription(new SqsSubscription(queue))
 
 		//dynamo
 		const cdkTable = new dynamodb.Table(this, "cdkTable", {
@@ -22,7 +41,7 @@ export class CdkStack extends cdk.Stack {
 			handler: "getItem.handler",
 			runtime: lambda.Runtime.NODEJS_16_X,
 			environment: {
-				TADLE_NAME: cdkTable.tableName,
+				TABLE_NAME: cdkTable.tableName,
 				PRIMARY_KEY: "itemId"
 			}
 		})
@@ -32,7 +51,7 @@ export class CdkStack extends cdk.Stack {
 			handler: "createItem.handler",
 			runtime: lambda.Runtime.NODEJS_16_X,
 			environment: {
-				TADLE_NAME: cdkTable.tableName,
+				TABLE_NAME: cdkTable.tableName,
 				PRIMARY_KEY: "itemId"
 			}
 		})
@@ -41,15 +60,25 @@ export class CdkStack extends cdk.Stack {
 			code: new lambda.AssetCode("./src"),
 			handler: "createMessage.handler",
 			runtime: lambda.Runtime.NODEJS_16_X,
-			// environment: {
-			// 	TADLE_NAME: cdkTable.tableName,
-			// 	PRIMARY_KEY: "itemId"
-			// }
+			environment: {
+				TOPIC_ARN: topic.topicArn
+			}
+		})
+
+		const addMessageInDinamo = new lambda.Function(this, "indexAddMessageInDinamo", {
+			code: new lambda.AssetCode("./src"),
+			handler: "addInDynamo.handler",
+			runtime: lambda.Runtime.NODEJS_16_X,
+			environment: {
+				TABLE_NAME: cdkTable.tableName
+			}
 		})
 
 		cdkTable.grantReadData(getItem)
 		cdkTable.grantReadWriteData(createItem)
 
+		const eventSource = new lambdaEventSources.SqsEventSource(queue)
+		addMessageInDinamo.addEventSource(eventSource)
 		//api
 		const api = new apigeteway.RestApi(this, "apiItem", {
 			restApiName: "testCDK_API"
@@ -78,8 +107,24 @@ export class CdkStack extends cdk.Stack {
 			}
 		})
 
+		const messageModel = api.addModel("MessageModel", {
+			schema: {
+				type: apigeteway.JsonSchemaType.OBJECT,
+				properties: {
+					message: {
+						type: apigeteway.JsonSchemaType.STRING
+					}
+				},
+				required: ["message"]
+			}
+		})
+
 		const snsAPI = api.root.addResource("sns")
 		const createMessageApi = new apigeteway.LambdaIntegration(createMessage)
-		snsAPI.addMethod("POST", createMessageApi)
+		snsAPI.addMethod("POST", createMessageApi, {
+			requestModels: {
+				"application/json": messageModel
+			}
+		})
 	}
 }
