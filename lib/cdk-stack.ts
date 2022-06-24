@@ -16,8 +16,6 @@ export class CdkStack extends cdk.Stack {
 			queueName: "CDK"
 		})
 
-		// queue.grantConsumeMessages(addMessageInDinamo)
-
 		//SNS
 		const topic: Topic = new Topic(this, "CDKTopic", {
 			displayName: "CDK",
@@ -37,7 +35,7 @@ export class CdkStack extends cdk.Stack {
 
 		//lambda
 		const getItem = new lambda.Function(this, "indexItem", {
-			code: new lambda.AssetCode("./src"),
+			code: new lambda.AssetCode("./src/getItem"),
 			handler: "getItem.handler",
 			runtime: lambda.Runtime.NODEJS_16_X,
 			environment: {
@@ -47,7 +45,7 @@ export class CdkStack extends cdk.Stack {
 		})
 
 		const createItem = new lambda.Function(this, "indexCreateItem", {
-			code: new lambda.AssetCode("./src"),
+			code: new lambda.AssetCode("./src/createItem"),
 			handler: "createItem.handler",
 			runtime: lambda.Runtime.NODEJS_16_X,
 			environment: {
@@ -55,9 +53,12 @@ export class CdkStack extends cdk.Stack {
 				PRIMARY_KEY: "itemId"
 			}
 		})
+		cdkTable.grantReadData(getItem)
+		cdkTable.grantReadWriteData(createItem)
 
+		//lambda for sns sqs
 		const createMessage = new lambda.Function(this, "indexCreateMessage", {
-			code: new lambda.AssetCode("./src"),
+			code: new lambda.AssetCode("./src/createMessage"),
 			handler: "createMessage.handler",
 			runtime: lambda.Runtime.NODEJS_16_X,
 			environment: {
@@ -66,7 +67,7 @@ export class CdkStack extends cdk.Stack {
 		})
 
 		const addMessageInDinamo = new lambda.Function(this, "indexAddMessageInDinamo", {
-			code: new lambda.AssetCode("./src"),
+			code: new lambda.AssetCode("./src/addInDynamo"),
 			handler: "addInDynamo.handler",
 			runtime: lambda.Runtime.NODEJS_16_X,
 			environment: {
@@ -74,8 +75,6 @@ export class CdkStack extends cdk.Stack {
 			}
 		})
 
-		cdkTable.grantReadData(getItem)
-		cdkTable.grantReadWriteData(createItem)
 
 		const eventSource = new lambdaEventSources.SqsEventSource(queue)
 		addMessageInDinamo.addEventSource(eventSource)
